@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(SHOPPER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  brand         Brand?
+  orders        Order[]        @relation("ShopperOrders")
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Brand {
+  id          String      @id @default(uuid())
+  name        String
+  slug        String      @unique
+  description String
+  logoUrl     String?
+  bannerUrl   String?
+  location    String?
+  status      BrandStatus @default(PENDING)
+  socialLinks Json        @default("{}")
+  themeColor  String?
+  ownerId     String      @unique
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  owner    User      @relation(fields: [ownerId], references: [id])
+  products Product[]
+  orders   Order[]
+
+  @@map("brands")
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  name        String
+  description String
+  price       Decimal       @db.Decimal(10, 2)
+  stock       Int           @default(0)
+  status      ProductStatus @default(DRAFT)
+  images      String[]
+  category    String
+  brandId     String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  brand      Brand       @relation(fields: [brandId], references: [id])
+  orderItems OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  orderNumber       String      @unique
+  status            OrderStatus @default(PENDING_PAYMENT)
+  totalAmount       Decimal     @db.Decimal(10, 2)
+  shippingFee       Decimal     @db.Decimal(10, 2)
+  shippingAddress   Json
+  trackingNumber    String?
+  shippingCourier   String?
+  paymongoPaymentId String?
+  shopperId         String
+  brandId           String
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  shopper       User           @relation("ShopperOrders", fields: [shopperId], references: [id])
+  brand         Brand          @relation(fields: [brandId], references: [id])
+  items         OrderItem[]
+  notifications Notification[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String  @id @default(uuid())
+  productId    String
+  productName  String
+  productImage String
+  quantity     Int
+  unitPrice    Decimal @db.Decimal(10, 2)
+  orderId      String
+
+  product Product @relation(fields: [productId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@map("notifications")
+}
+
+enum UserRole {
+  SHOPPER
+  BRAND_OWNER
+  ADMIN
+}
+
+enum BrandStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  TO_SHIP
+  SHIPPED
+  TO_RECEIVE
+  COMPLETED
+  CANCELLED
+}
